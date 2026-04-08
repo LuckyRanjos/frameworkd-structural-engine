@@ -1,0 +1,107 @@
+// ============================================================
+// firestore.rules
+// Location: root of your project (same level as package.json)
+//
+// PURPOSE:
+// These rules run on Firebase's servers and control who can
+// read or write what. They are your database's bouncer.
+//
+// HOW TO DEPLOY THESE RULES:
+// Option A (easiest while building):
+//   Firebase console → Firestore → Rules tab → paste these in → Publish
+//
+// Option B (for later, when you want to automate deployment):
+//   Install Firebase CLI: npm install -g firebase-tools
+//   Run: firebase deploy --only firestore:rules
+//
+// CRITICAL:
+// Right now your database is in "test mode" which allows
+// anyone to read/write anything. That is fine during
+// development but MUST be replaced with these rules before
+// you show the product to real users.
+// ============================================================
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --------------------------------------------------------
+    // HELPER FUNCTIONS
+    // These reusable checks are called from the rules below.
+    // --------------------------------------------------------
+
+    // isSignedIn() — is there a logged-in user at all?
+    // request.auth is null if no one is logged in.
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // isOwner(userId) — does the logged-in user own this document?
+    // Prevents User A from reading User B's decisions.
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+
+    // --------------------------------------------------------
+    // DECISIONS COLLECTION
+    // /decisions/{decisionId}
+    // --------------------------------------------------------
+
+    match /decisions/{decisionId} {
+
+      // READ: a user can only read their OWN decisions.
+      // resource.data.userId is the userId stored in the document.
+      // request.auth.uid is the ID of whoever is making the request.
+      // They must match.
+      allow read: if isSignedIn() && isOwner(resource.data.userId);
+
+      // CREATE: a signed-in user can create a decision document,
+      // BUT only if the userId they're saving matches their own UID.
+      // This prevents a user from creating decisions under someone
+      // else's account.
+      // request.resource.data is the data being written.
+      allow create: if isSignedIn() && isOwner(request.resource.data.userId);
+
+      // UPDATE / DELETE: not allowed from the client side.
+      // Decisions are immutable once saved — the audit trail
+      // only works if records can't be edited or deleted.
+      // If you need to delete records, do it from a server-side
+      // admin function, not from the browser.
+      allow update, delete: if false;
+    }
+
+    // --------------------------------------------------------
+    // USERS COLLECTION
+    // /users/{userId}
+    // --------------------------------------------------------
+
+    match /users/{userId} {
+
+      // READ: users can read their own profile.
+      allow read: if isSignedIn() && isOwner(userId);
+
+      // CREATE: only if the document ID matches their own UID.
+      // This runs when createUserProfile() is called at sign-up.
+      allow create: if isSignedIn() && isOwner(userId);
+
+      // UPDATE: users can update their own profile,
+      // BUT they cannot change their own plan field.
+      // Plan changes must come from your server (Stripe webhook).
+      // This prevents users from manually upgrading themselves.
+      allow update: if isSignedIn()
+                    && isOwner(userId)
+                    && !("plan" in request.resource.data);
+    }
+
+    // --------------------------------------------------------
+    // EVERYTHING ELSE
+    // Deny all access to any collection not listed above.
+    // If you add new collections later, add rules for them.
+    // --------------------------------------------------------
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
