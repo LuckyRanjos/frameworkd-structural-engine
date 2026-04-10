@@ -9,6 +9,7 @@ import {
   signOut,
   sendEmailVerification,
   onAuthStateChanged,
+  fetchSignInMethodsForEmail,
   User,
 } from "firebase/auth";
 
@@ -78,6 +79,17 @@ export async function sendVerificationEmail(): Promise<void> {
 // ============================================================
 export function getCurrentUser(): User | null {
   return auth.currentUser;
+}
+
+// ============================================================
+// FETCH SIGN-IN METHOD LIST
+// ============================================================
+export async function getSignInMethodsForEmail(email: string): Promise<string[]> {
+  try {
+    return await fetchSignInMethodsForEmail(auth, email);
+  } catch (error: any) {
+    throw new Error(`Failed to check sign-in methods: ${error.message}`);
+  }
 }
 
 // ============================================================

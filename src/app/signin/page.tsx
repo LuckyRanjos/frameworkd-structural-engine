@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { signIn, signUp } from "@/lib/auth";
+import { signIn, signUp, getSignInMethodsForEmail } from "@/lib/auth";
 import { Card, Button, Input } from "@/components/design-system";
 
 export default function SignInPage() {
@@ -13,6 +13,7 @@ export default function SignInPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,12 +27,27 @@ export default function SignInPage() {
         await signUp(email, password);
       }
 
-      // On success, redirect to home page
-      // The UserContext will automatically update and show the app
       router.push("/");
     } catch (err: any) {
       console.error(`${mode} error:`, err);
-      setError(err.message || `${mode === "signin" ? "Sign in" : "Sign up"} failed`);
+      let message = err.message || `${mode === "signin" ? "Sign in" : "Sign up"} failed`;
+
+      if (mode === "signin" && email) {
+        try {
+          const methods = await getSignInMethodsForEmail(email);
+          if (methods.includes("google.com")) {
+            message =
+              "That email is registered with Google sign-in. Please use Google sign-in or try a different email.";
+          } else if (methods.length > 0 && !methods.includes("password")) {
+            message =
+              "This account uses a different sign-in method. Please use the correct provider or create a new account.";
+          }
+        } catch (fetchErr) {
+          console.warn("Unable to fetch sign-in methods:", fetchErr);
+        }
+      }
+
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -89,12 +105,14 @@ export default function SignInPage() {
 
               <Input
                 label="Password"
-                type="password"
+                type={showPassword ? "text" : "password"}
                 placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 disabled={loading}
+                rightIcon={showPassword ? "🙈" : "👁"}
+                onRightIconClick={() => setShowPassword((prev) => !prev)}
               />
 
               <Button
