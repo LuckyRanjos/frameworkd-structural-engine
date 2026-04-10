@@ -35,11 +35,15 @@ const UserContext = createContext<UserContextType | undefined>(undefined);
 // ============================================================
 
 export const UserProvider = ({ children }: { children: ReactNode }) => {
+  // User authentication state
   const [userId, setUserId] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
+  
+  // User profile state — role is the source of truth for permissions
   const [plan, setPlan] = useState<string>("free");
   const [role, setRole] = useState<string>("user");
-  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  
+  // Loading and error state
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,7 +58,6 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
           setEmail(null);
           setPlan("free");
           setRole("user");
-          setIsAdmin(false);
           setError(null);
         } else {
           // User is authenticated — use their real Firebase UID
@@ -62,20 +65,19 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
           setUserId(uid);
           setEmail(firebaseUser.email || null);
 
-          // Fetch user document from Firestore
+          // Fetch user document from Firestore to get role and plan
           const userDocRef = doc(db, "users", uid);
           const userDocSnap = await getDoc(userDocRef);
 
           if (userDocSnap.exists()) {
             const userData = userDocSnap.data();
-            setPlan(userData.plan || "free");
+            // Role is the source of truth for permissions
             setRole(userData.role || "user");
-            setIsAdmin(userData.isAdmin || false);
+            setPlan(userData.plan || "free");
           } else {
             // User doc doesn't exist yet, use defaults
-            setPlan("free");
             setRole("user");
-            setIsAdmin(false);
+            setPlan("free");
           }
 
           setError(null);
@@ -92,12 +94,13 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     return () => unsubscribe();
   }, []);
 
+  // Build context value with computed isAdmin from role
   const value: UserContextType = {
     userId,
     email,
     plan,
     role,
-    isAdmin,
+    isAdmin: role === "admin", // Computed from role, not separate state
     isAuthenticated: !!userId,
     isLoading,
     error,
