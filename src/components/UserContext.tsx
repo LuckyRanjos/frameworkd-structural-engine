@@ -47,32 +47,39 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     // Listen to Firebase auth state changes
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
-        // Determine UID: use Firebase user if logged in, otherwise use test UID
-        // ⚠️ REPLACE 'test-uid-for-development' with your real Firebase user ID
-        // Find your UID in Firebase Console → Authentication → Users → Copy UID
-        const uid = firebaseUser?.uid || "test-uid-for-development";
-        const userEmail = firebaseUser?.email || null;
-
-        setUserId(uid);
-        setEmail(userEmail);
-
-        // Fetch user document from Firestore
-        const userDocRef = doc(db, "users", uid);
-        const userDocSnap = await getDoc(userDocRef);
-
-        if (userDocSnap.exists()) {
-          const userData = userDocSnap.data();
-          setPlan(userData.plan || "free");
-          setRole(userData.role || "user");
-          setIsAdmin(userData.isAdmin || false);
-        } else {
-          // User doc doesn't exist yet, use defaults
+        if (!firebaseUser) {
+          // No user authenticated — clear all user data and leave userId null
+          // SECURITY: Removed hardcoded fallback UID (no implicit authentication allowed)
+          setUserId(null);
+          setEmail(null);
           setPlan("free");
           setRole("user");
           setIsAdmin(false);
-        }
+          setError(null);
+        } else {
+          // User is authenticated — use their real Firebase UID
+          const uid = firebaseUser.uid;
+          setUserId(uid);
+          setEmail(firebaseUser.email || null);
 
-        setError(null);
+          // Fetch user document from Firestore
+          const userDocRef = doc(db, "users", uid);
+          const userDocSnap = await getDoc(userDocRef);
+
+          if (userDocSnap.exists()) {
+            const userData = userDocSnap.data();
+            setPlan(userData.plan || "free");
+            setRole(userData.role || "user");
+            setIsAdmin(userData.isAdmin || false);
+          } else {
+            // User doc doesn't exist yet, use defaults
+            setPlan("free");
+            setRole("user");
+            setIsAdmin(false);
+          }
+
+          setError(null);
+        }
       } catch (err: any) {
         console.error("Error fetching user data:", err);
         setError(err.message || "Failed to fetch user data");
