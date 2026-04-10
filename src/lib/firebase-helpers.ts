@@ -35,6 +35,20 @@ const DAILY_LIMITS = {
   org: 999,
 };
 
+export function normalizeVerdictStatus(verdict) {
+  if (!verdict) return "FAIL";
+  if (typeof verdict === "string") return verdict;
+  if (typeof verdict === "object") {
+    return (
+      verdict.status ||
+      verdict.final_verdict?.status ||
+      verdict?.verdict ||
+      "FAIL"
+    );
+  }
+  return "FAIL";
+}
+
 async function incrementDailyUsage(userId) {
   try {
     const today = new Date().toISOString().split("T")[0];
@@ -55,19 +69,33 @@ async function incrementDailyUsage(userId) {
 
 export async function saveDecision(userId, decisionData) {
   try {
+    const score = Number(decisionData.score ?? decisionData.scorecard?.total ?? 0);
+    const summary = decisionData.summary || decisionData.verdict?.summary || "";
+    const requiredActions = Array.isArray(decisionData.requiredActions)
+      ? decisionData.requiredActions
+      : Array.isArray(decisionData.verdict?.required_actions)
+        ? decisionData.verdict.required_actions
+        : [];
+    const pivotSuggestions = Array.isArray(decisionData.pivotSuggestions)
+      ? decisionData.pivotSuggestions
+      : Array.isArray(decisionData.verdict?.pivot_suggestions)
+        ? decisionData.verdict.pivot_suggestions
+        : [];
+    const keyInsight = decisionData.keyInsight || decisionData.verdict?.key_insight || "";
+
     const docRef = await addDoc(decisionsRef, {
       userId,
       decisionText:     decisionData.decisionText,
       mode:             decisionData.mode,
       verdict:          decisionData.verdict,
-      score:            decisionData.score,
-      summary:          decisionData.summary,
-      requiredActions:  decisionData.requiredActions,
-      keyInsight:       decisionData.keyInsight,
-      pivotSuggestions: decisionData.pivotSuggestions,
+      score,
+      summary,
+      requiredActions,
+      keyInsight,
+      pivotSuggestions,
       auditors:         decisionData.auditors,
       synthesis:        decisionData.synthesis,
-      totalCostUSD:     decisionData.totalCostUSD || 0,   // ← new cost field
+      totalCostUSD:     decisionData.totalCostUSD || 0,
       createdAt:        serverTimestamp(),
     });
 
@@ -127,11 +155,11 @@ export async function getUserStats(userId) {
   try {
     const decisions = await getUserDecisions(userId, 500);
 
-    const total       = decisions.length;
-    const passed      = decisions.filter(d => d.verdict === "PASS").length;
-    const conditional = decisions.filter(d => d.verdict === "CONDITIONAL").length;
-    const failed      = decisions.filter(d => d.verdict === "FAIL").length;
-    const passRate    = total > 0 ? Math.round((passed / total) * 100) : 0;
+    const total = decisions.length;
+    const passed = decisions.filter(d => normalizeVerdictStatus(d.verdict) === "PASS").length;
+    const conditional = decisions.filter(d => normalizeVerdictStatus(d.verdict) === "CONDITIONAL").length;
+    const failed = decisions.filter(d => normalizeVerdictStatus(d.verdict) === "FAIL").length;
+    const passRate = total > 0 ? Math.round((passed / total) * 100) : 0;
 
     return { total, passed, conditional, failed, passRate };
 

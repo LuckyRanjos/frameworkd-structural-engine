@@ -203,6 +203,12 @@ export async function POST(request) {
     const verdictData = synthesisParsed?.final_verdict || baseAnalysis?.verdict || {};
     const scorecardData = synthesisParsed?.final_scorecard || baseAnalysis?.scorecard || { total: 0 };
 
+    const normalizedScore = Number(scorecardData?.total ?? 0);
+    const normalizedSummary = verdictData.summary || "Analysis complete.";
+    const normalizedRequiredActions = Array.isArray(verdictData.required_actions) ? verdictData.required_actions : [];
+    const normalizedPivotSuggestions = Array.isArray(verdictData.pivot_suggestions) ? verdictData.pivot_suggestions : [];
+    const normalizedKeyInsight = verdictData.key_insight || baseAnalysis.step4_insight?.key_insight || "";
+
     const result = {
       decisionText,
       mode,
@@ -223,16 +229,21 @@ export async function POST(request) {
 
       // *** SCORECARD (from synthesis if available, else from auditor) ***
       scorecard: scorecardData || { total: 0 },
+      score: normalizedScore,
 
       // *** VERDICT (from synthesis if available, else from auditor) ***
       verdict: {
         status: verdictData.status || "FAIL",
         confidence: verdictData.confidence || "MEDIUM",
-        summary: verdictData.summary || "Analysis complete.",
-        key_insight: verdictData.key_insight || baseAnalysis.step4_insight?.key_insight || "",
-        required_actions: Array.isArray(verdictData.required_actions) ? verdictData.required_actions : [],
-        pivot_suggestions: Array.isArray(verdictData.pivot_suggestions) ? verdictData.pivot_suggestions : []
+        summary: normalizedSummary,
+        key_insight: normalizedKeyInsight,
+        required_actions: normalizedRequiredActions,
+        pivot_suggestions: normalizedPivotSuggestions,
       },
+      summary: normalizedSummary,
+      requiredActions: normalizedRequiredActions,
+      pivotSuggestions: normalizedPivotSuggestions,
+      keyInsight: normalizedKeyInsight,
 
       // *** REFERENCE AUDIT TRAILS (for transparency) ***
       auditors: {

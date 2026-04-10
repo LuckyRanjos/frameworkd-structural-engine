@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "verify:normalize-verdict-status": "node scripts/verify-normalize-verdict-status.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
