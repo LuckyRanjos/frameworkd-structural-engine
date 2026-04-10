@@ -9,7 +9,8 @@
     "lint": "eslint",
     "verify:normalize-verdict-status": "node scripts/verify-normalize-verdict-status.js",
     "verify:auth": "node scripts/verify-auth-exports.js",
-    "verify": "npm run verify:normalize-verdict-status && npm run verify:auth"
+    "verify:user-context": "node scripts/verify-user-context.js",
+    "verify": "npm run verify:normalize-verdict-status && npm run verify:auth && npm run verify:user-context"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
