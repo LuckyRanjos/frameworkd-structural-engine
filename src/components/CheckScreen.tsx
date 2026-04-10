@@ -44,7 +44,7 @@ const CheckScreen: React.FC = () => {
 
   return (
     <div className="space-y-10">
-      <DailyUsageBar userId={userId || "test-user"} />
+      {userId && <DailyUsageBar userId={userId} />}
 
       {error && (
         <div className="bg-red-100 text-red-700 px-6 py-4 rounded-3xl text-center">

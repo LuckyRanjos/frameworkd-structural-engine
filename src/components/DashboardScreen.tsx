@@ -22,7 +22,7 @@ const DashboardScreen: React.FC = () => {
 
   return (
     <div className="space-y-10">
-      <DailyUsageBar userId={userId || "test-user"} />
+      {userId && <DailyUsageBar userId={userId} />}
       {/* rest of your dashboard grid stays exactly the same */}
       <div>
         <h2 className="text-lg font-medium mb-6">YOUR PERFORMANCE</h2>
