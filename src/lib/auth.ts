@@ -6,6 +6,8 @@
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
   signOut,
   sendEmailVerification,
   onAuthStateChanged,
@@ -44,6 +46,16 @@ export async function signIn(email: string, password: string): Promise<User> {
     return userCredential.user;
   } catch (error: any) {
     throw new Error(`Sign in failed: ${error.message}`);
+  }
+}
+
+export async function signInWithGoogle(): Promise<User> {
+  try {
+    const provider = new GoogleAuthProvider();
+    const result = await signInWithPopup(auth, provider);
+    return result.user;
+  } catch (error: any) {
+    throw new Error(`Google sign-in failed: ${error.message}`);
   }
 }
 

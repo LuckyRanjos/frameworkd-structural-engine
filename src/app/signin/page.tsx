@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { signIn, signUp, getSignInMethodsForEmail } from "@/lib/auth";
+import { signIn, signUp, signInWithGoogle, getSignInMethodsForEmail } from "@/lib/auth";
 import { Card, Button, Input } from "@/components/design-system";
 
 export default function SignInPage() {
@@ -24,6 +24,23 @@ export default function SignInPage() {
       if (mode === "signin") {
         await signIn(email, password);
       } else {
+        const methods = await getSignInMethodsForEmail(email);
+        if (methods.length > 0) {
+          if (methods.includes("password")) {
+            throw new Error(
+              "This email is already registered. Please sign in instead of creating a new account."
+            );
+          }
+          if (methods.includes("google.com")) {
+            throw new Error(
+              "This email is registered with Google sign-in. Please use Google sign-in instead."
+            );
+          }
+          throw new Error(
+            "This email is already registered with a different sign-in method. Please use the correct provider."
+          );
+        }
+
         await signUp(email, password);
       }
 
@@ -35,12 +52,9 @@ export default function SignInPage() {
       if (mode === "signin" && email) {
         try {
           const methods = await getSignInMethodsForEmail(email);
-          if (methods.includes("google.com")) {
+          if (methods.includes("google.com") && !methods.includes("password")) {
             message =
-              "That email is registered with Google sign-in. Please use Google sign-in or try a different email.";
-          } else if (methods.length > 0 && !methods.includes("password")) {
-            message =
-              "This account uses a different sign-in method. Please use the correct provider or create a new account.";
+              "That email is registered with Google sign-in. Please sign in with Google.";
           }
         } catch (fetchErr) {
           console.warn("Unable to fetch sign-in methods:", fetchErr);
