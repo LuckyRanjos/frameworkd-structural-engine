@@ -9,6 +9,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
 
 import { checkPlanLimit, saveDecision } from "@/lib/firebase-helpers";
+import { db } from "@/lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
 
 // ============================================================
 // HELPER FUNCTIONS WITH COST TRACKING
@@ -96,6 +98,35 @@ function safeParseJSON(text) {
 }
 
 // ============================================================
+// AUTHENTICATION VERIFICATION
+// ============================================================
+
+/**
+ * Verify that the user exists in Firestore /users collection
+ * @param {string} userId - Firebase UID
+ * @returns {Promise<{exists: boolean, user: object|null}>}
+ */
+async function verifyUserExists(userId) {
+  try {
+    if (!userId || typeof userId !== "string" || userId.trim() === "") {
+      return { exists: false, user: null, reason: "User ID is required." };
+    }
+
+    const userDocRef = doc(db, "users", userId);
+    const userDocSnap = await getDoc(userDocRef);
+
+    if (!userDocSnap.exists()) {
+      return { exists: false, user: null, reason: "User not found. Please sign up or log in." };
+    }
+
+    return { exists: true, user: userDocSnap.data() };
+  } catch (error) {
+    console.error("Error verifying user:", error);
+    return { exists: false, user: null, reason: "Error verifying user authentication." };
+  }
+}
+
+// ============================================================
 // MAIN API HANDLER
 // ============================================================
 
@@ -106,9 +137,30 @@ export async function POST(request) {
     const body = await request.json();
     decisionText = body.decisionText;
     mode = body.mode || "Business";
-    userId = body.userId || "anonymous";
+    userId = body.userId;
   } catch {
     return Response.json({ error: "Invalid request body." }, { status: 400 });
+  }
+
+  // ============================================================
+  // AUTHENTICATION CHECK
+  // ============================================================
+  const authVerification = await verifyUserExists(userId);
+  if (!authVerification.exists) {
+    return Response.json(
+      { 
+        error: authVerification.reason,
+        details: "Please sign up or log in to use this service."
+      }, 
+      { status: 401 }
+    );
+  }
+
+  // ============================================================
+  // VALIDATION & PLAN LIMIT CHECK
+  // ============================================================
+  if (!decisionText || decisionText.trim().length < 20) {
+    return Response.json({ error: "Decision text is too short." }, { status: 400 });
   }
 
   const limitCheck = await checkPlanLimit(userId);
@@ -116,12 +168,9 @@ export async function POST(request) {
     return Response.json({ error: limitCheck.reason }, { status: 403 });
   }
 
+  // Initialize LLM clients
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-  if (!decisionText || decisionText.trim().length < 20) {
-    return Response.json({ error: "Decision text is too short." }, { status: 400 });
-  }
 
   try {
     const userMessage = buildUserMessage(decisionText, mode);
