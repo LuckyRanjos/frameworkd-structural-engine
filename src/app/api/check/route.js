@@ -123,136 +123,145 @@ export async function POST(request) {
     return Response.json({ error: "Decision text is too short." }, { status: 400 });
   }
 
-  const userMessage = buildUserMessage(decisionText, mode);
-  console.log("Starting parallel LLM calls...");
-
-  // === AUDITORS (always run) ===
-  let claudeResult, gptResult;
   try {
-    [claudeResult, gptResult] = await Promise.all([
-      callClaude(anthropic, SYSTEM_PROMPT, userMessage, "Claude Auditor"),
-      callGPT(openai, SYSTEM_PROMPT, userMessage),
-    ]);
+    const userMessage = buildUserMessage(decisionText, mode);
+    console.log("Starting parallel LLM calls...");
+
+    // === AUDITORS (always run) ===
+    let claudeResult, gptResult;
+    try {
+      [claudeResult, gptResult] = await Promise.all([
+        callClaude(anthropic, SYSTEM_PROMPT, userMessage, "Claude Auditor"),
+        callGPT(openai, SYSTEM_PROMPT, userMessage),
+      ]);
+    } catch (error) {
+      console.error("Auditor failure:", error.message);
+      return Response.json({ error: "Analysis failed." }, { status: 500 });
+    }
+
+    const claudeRaw = claudeResult.text;
+    const gptRaw = gptResult.text;
+
+    // === EARLY PARSE FOR CONDITIONAL SYNTHESIS ===
+    const claudeParsedEarly = safeParseJSON(claudeRaw);
+    const gptParsedEarly = safeParseJSON(gptRaw);
+
+    const claudeVerdict = claudeParsedEarly?.verdict?.status || "FAIL";
+    const gptVerdict = gptParsedEarly?.verdict?.status || "FAIL";
+    const claudeScore = claudeParsedEarly?.scorecard?.total || 0;
+    const gptScore = gptParsedEarly?.scorecard?.total || 0;
+
+    const shouldSynthesize = (claudeVerdict !== gptVerdict) || (Math.min(claudeScore, gptScore) < 4);
+
+    console.log(`Auditor alignment → ${shouldSynthesize ? "DISAGREE/LOW → synthesize" : "AGREE/HIGH → SKIP synthesis"}`);
+
+    // === SYNTHESIS (only when needed) ===
+    let synthesisRaw;
+    let synthesisCost = 0;
+
+    if (shouldSynthesize) {
+      console.log("Running synthesis...");
+      const synthesisUserMessage = buildSynthesisMessage(decisionText, claudeRaw, gptRaw);
+
+      const synthesisResult = await callClaude(
+        anthropic,
+        SYNTHESIS_SYSTEM_PROMPT,
+        synthesisUserMessage,
+        "Claude Synthesizer"
+      );
+
+      synthesisRaw = synthesisResult.text;
+      synthesisCost = synthesisResult.costUSD;
+    } else {
+      console.log("✅ Skipping synthesis to save costs");
+      synthesisRaw = JSON.stringify({
+        agreement_points: ["Claude Haiku and GPT-4o-mini reached identical conclusions"],
+        disagreement_points: [],
+        arbitration_notes: "Synthesis skipped for cost efficiency",
+        final_scorecard: claudeParsedEarly.scorecard || gptParsedEarly.scorecard || { total: Math.max(claudeScore, gptScore) },
+        final_verdict: {
+          status: claudeVerdict,
+          confidence: "HIGH",
+          summary: "Strong auditor agreement — synthesis step was skipped.",
+          key_insight: claudeParsedEarly.step4_insight?.key_insight || gptParsedEarly.step4_insight?.key_insight || "",
+          required_actions: claudeParsedEarly.verdict?.required_actions || [],
+          pivot_suggestions: [],
+        }
+      });
+    }
+
+    // === PARSE & BUILD RESULT ===
+    const claudeParsed = safeParseJSON(claudeRaw);
+    const gptParsed = safeParseJSON(gptRaw);
+    const synthesisParsed = safeParseJSON(synthesisRaw);
+
+    const totalCostUSD = claudeResult.costUSD + gptResult.costUSD + synthesisCost;
+
+    // CRITICAL: Use Claude's detailed analysis as the base (has all steps)
+    // Then override only the verdict/scorecard with synthesis if it ran
+    const baseAnalysis = claudeParsed || gptParsed || {};
+    const verdictData = synthesisParsed?.final_verdict || baseAnalysis?.verdict || {};
+    const scorecardData = synthesisParsed?.final_scorecard || baseAnalysis?.scorecard || { total: 0 };
+
+    const result = {
+      decisionText,
+      mode,
+      userId,
+
+      // *** DETAILED ANALYSIS STEPS (always from auditor, never lost) ***
+      precondition: baseAnalysis.precondition || {},
+      step0_illusion: baseAnalysis.step0_illusion || {},
+      step1_pretipping: baseAnalysis.step1_pretipping || {},
+      step2_unlock: baseAnalysis.step2_unlock || {},
+      step2_5_enforcement: baseAnalysis.step2_5_enforcement || {},
+      step2_6_accelerants: baseAnalysis.step2_6_accelerants || {},
+      step3_post_unlock: baseAnalysis.step3_post_unlock || {},
+      step3_5_reversal: baseAnalysis.step3_5_reversal || {},
+      step4_insight: baseAnalysis.step4_insight || {},
+      step5_path: baseAnalysis.step5_path || {},
+      step5_5_time: baseAnalysis.step5_5_time || {},
+
+      // *** SCORECARD (from synthesis if available, else from auditor) ***
+      scorecard: scorecardData || { total: 0 },
+
+      // *** VERDICT (from synthesis if available, else from auditor) ***
+      verdict: {
+        status: verdictData.status || "FAIL",
+        confidence: verdictData.confidence || "MEDIUM",
+        summary: verdictData.summary || "Analysis complete.",
+        key_insight: verdictData.key_insight || baseAnalysis.step4_insight?.key_insight || "",
+        required_actions: Array.isArray(verdictData.required_actions) ? verdictData.required_actions : [],
+        pivot_suggestions: Array.isArray(verdictData.pivot_suggestions) ? verdictData.pivot_suggestions : []
+      },
+
+      // *** REFERENCE AUDIT TRAILS (for transparency) ***
+      auditors: {
+        claude: claudeParsed || {},
+        gpt: gptParsed || {},
+      },
+      synthesis: synthesisParsed || {},
+
+      totalCostUSD: Number(totalCostUSD.toFixed(6)),
+    };
+
+    const savedDocId = await saveDecision(userId, result);
+
+    console.log(`✅ Decision saved. Total cost: $${result.totalCostUSD}`);
+
+    return Response.json({
+      success: true,
+      decisionId: savedDocId,
+      result,
+      costUSD: result.totalCostUSD,
+    }, { status: 200 });
+
   } catch (error) {
-    console.error("Auditor failure:", error.message);
-    return Response.json({ error: "Analysis failed." }, { status: 500 });
+    console.error("Fatal error in API:", error);
+    return Response.json({ 
+      error: "Analysis pipeline failed", 
+      details: error.message 
+    }, { status: 500 });
   }
-
-  const claudeRaw = claudeResult.text;
-  const gptRaw = gptResult.text;
-
-  // === EARLY PARSE FOR CONDITIONAL SYNTHESIS ===
-  const claudeParsedEarly = safeParseJSON(claudeRaw);
-  const gptParsedEarly = safeParseJSON(gptRaw);
-
-  const claudeVerdict = claudeParsedEarly?.verdict?.status || "FAIL";
-  const gptVerdict = gptParsedEarly?.verdict?.status || "FAIL";
-  const claudeScore = claudeParsedEarly?.scorecard?.total || 0;
-  const gptScore = gptParsedEarly?.scorecard?.total || 0;
-
-  const shouldSynthesize = (claudeVerdict !== gptVerdict) || (Math.min(claudeScore, gptScore) < 4);
-
-  console.log(`Auditor alignment → ${shouldSynthesize ? "DISAGREE/LOW → synthesize" : "AGREE/HIGH → SKIP synthesis"}`);
-
-  // === SYNTHESIS (only when needed) ===
-  let synthesisRaw;
-  let synthesisCost = 0;
-
-  if (shouldSynthesize) {
-    console.log("Running synthesis...");
-    const synthesisUserMessage = buildSynthesisMessage(decisionText, claudeRaw, gptRaw);
-
-    const synthesisResult = await callClaude(
-      anthropic,
-      SYNTHESIS_SYSTEM_PROMPT,
-      synthesisUserMessage,
-      "Claude Synthesizer"
-    );
-
-    synthesisRaw = synthesisResult.text;
-    synthesisCost = synthesisResult.costUSD;
-  } else {
-    console.log("✅ Skipping synthesis to save costs");
-    synthesisRaw = JSON.stringify({
-      agreement_points: ["Claude Haiku and GPT-4o-mini reached identical conclusions"],
-      disagreement_points: [],
-      arbitration_notes: "Synthesis skipped for cost efficiency",
-      final_scorecard: claudeParsedEarly.scorecard || gptParsedEarly.scorecard || { total: Math.max(claudeScore, gptScore) },
-      final_verdict: {
-        status: claudeVerdict,
-        confidence: "HIGH",
-        summary: "Strong auditor agreement — synthesis step was skipped.",
-        key_insight: claudeParsedEarly.step4_insight?.key_insight || gptParsedEarly.step4_insight?.key_insight || "",
-        required_actions: claudeParsedEarly.verdict?.required_actions || [],
-        pivot_suggestions: [],
-      }
-    });
-  }
-
-  // === PARSE & BUILD RESULT ===
-  const claudeParsed = safeParseJSON(claudeRaw);
-  const gptParsed = safeParseJSON(gptRaw);
-  const synthesisParsed = safeParseJSON(synthesisRaw);
-
-  const totalCostUSD = claudeResult.costUSD + gptResult.costUSD + synthesisCost;
-
-  // CRITICAL: Use Claude's detailed analysis as the base (has all steps)
-  // Then override only the verdict/scorecard with synthesis if it ran
-  const baseAnalysis = claudeParsed || gptParsed || {};
-  const verdictData = synthesisParsed?.final_verdict || baseAnalysis?.verdict || {};
-  const scorecardData = synthesisParsed?.final_scorecard || baseAnalysis?.scorecard || { total: 0 };
-
-  const result = {
-    decisionText,
-    mode,
-    userId,
-
-    // *** DETAILED ANALYSIS STEPS (always from auditor, never lost) ***
-    precondition: baseAnalysis.precondition,
-    step0_illusion: baseAnalysis.step0_illusion,
-    step1_pretipping: baseAnalysis.step1_pretipping,
-    step2_unlock: baseAnalysis.step2_unlock,
-    step2_5_enforcement: baseAnalysis.step2_5_enforcement,
-    step2_6_accelerants: baseAnalysis.step2_6_accelerants,
-    step3_post_unlock: baseAnalysis.step3_post_unlock,
-    step3_5_reversal: baseAnalysis.step3_5_reversal,
-    step4_insight: baseAnalysis.step4_insight,
-    step5_path: baseAnalysis.step5_path,
-    step5_5_time: baseAnalysis.step5_5_time,
-
-    // *** SCORECARD (from synthesis if available, else from auditor) ***
-    scorecard: scorecardData,
-
-    // *** VERDICT (from synthesis if available, else from auditor) ***
-    verdict: {
-      status: verdictData.status || "FAIL",
-      confidence: verdictData.confidence || "MEDIUM",
-      summary: verdictData.summary || "Analysis complete.",
-      key_insight: verdictData.key_insight || baseAnalysis.step4_insight?.key_insight || "",
-      required_actions: verdictData.required_actions || baseAnalysis.verdict?.required_actions || [],
-      pivot_suggestions: verdictData.pivot_suggestions || []
-    },
-
-    // *** REFERENCE AUDIT TRAILS (for transparency) ***
-    auditors: {
-      claude: claudeParsed,
-      gpt: gptParsed,
-    },
-    synthesis: synthesisParsed,
-
-    totalCostUSD: Number(totalCostUSD.toFixed(6)),
-  };
-
-  const savedDocId = await saveDecision(userId, result);
-
-  console.log(`✅ Decision saved. Total cost: $${result.totalCostUSD}`);
-
-  return Response.json({
-    success: true,
-    decisionId: savedDocId,
-    result,
-    costUSD: result.totalCostUSD,
-  }, { status: 200 });
 }
 
 // GET blocker stays the same
