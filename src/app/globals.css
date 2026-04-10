@@ -281,6 +281,15 @@ html {
   .animate-pulse-soft {
     animation: pulseSoft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
+  
+  /* Sidebar specific animations */
+  .sidebar-item-hover {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .sidebar-item-hover:hover {
+    transform: translateX(2px);
+  }
 }
 
 /* ============================================================
@@ -467,6 +476,113 @@ html {
   border: 3px solid rgba(217, 119, 6, 0.3);
   border-radius: 8px;
   pointer-events: none;
+}
+
+/* ============================================================
+   LOADING STATE HOURGLASS
+   ============================================================ */
+
+/* Hourglass Container */
+.hourglass-container {
+  position: relative;
+  width: 80px;
+  height: 120px;
+  animation: hourglass-gentle-rotate 8s ease-in-out infinite;
+}
+
+/* Top Chamber */
+.hourglass-top {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px;
+  height: 50px;
+  background: linear-gradient(135deg, rgba(217, 119, 6, 0.1), rgba(180, 83, 9, 0.1));
+  clip-path: polygon(0% 0%, 100% 0%, 75% 100%, 25% 100%);
+  border-radius: 4px 4px 0 0;
+  overflow: hidden;
+}
+
+.sand-top {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 30px;
+  background: linear-gradient(135deg, #d97706, #b45309);
+  animation: sand-drain-top 4s ease-in-out infinite;
+}
+
+/* Middle Frame/Neck */
+.hourglass-neck {
+  position: absolute;
+  top: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 8px;
+  height: 20px;
+  background: rgba(217, 119, 6, 0.2);
+  border-radius: 4px;
+}
+
+/* Bottom Chamber */
+.hourglass-bottom {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px;
+  height: 50px;
+  background: linear-gradient(135deg, rgba(217, 119, 6, 0.1), rgba(180, 83, 9, 0.1));
+  clip-path: polygon(25% 0%, 75% 0%, 100% 100%, 0% 100%);
+  border-radius: 0 0 4px 4px;
+  overflow: hidden;
+}
+
+.sand-bottom {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 20px;
+  background: linear-gradient(135deg, #d97706, #b45309);
+  animation: sand-fill-bottom 4s ease-in-out infinite;
+}
+
+/* Hourglass Animations */
+@keyframes hourglass-gentle-rotate {
+  0%, 100% {
+    transform: translateX(-50%) rotate(0deg);
+  }
+  25% {
+    transform: translateX(-50%) rotate(2deg);
+  }
+  75% {
+    transform: translateX(-50%) rotate(-2deg);
+  }
+}
+
+@keyframes sand-drain-top {
+  0%, 50% {
+    height: 30px;
+    opacity: 1;
+  }
+  50.1%, 100% {
+    height: 0px;
+    opacity: 0;
+  }
+}
+
+@keyframes sand-fill-bottom {
+  0%, 50% {
+    height: 0px;
+    opacity: 0;
+  }
+  50.1%, 100% {
+    height: 30px;
+    opacity: 1;
+  }
 }
 
 /* ============================================================

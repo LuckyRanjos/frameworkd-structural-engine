@@ -7,20 +7,14 @@ import Processing from "./Processing";
 import Result from "./Result";
 import RecentChecks from "./RecentChecks";
 import DailyUsageBar from "./DailyUsageBar";
+import { HourglassLoader } from "./design-system/HourglassLoader";
+import LoadingState from "./LoadingState";
 
 const CheckScreen: React.FC = () => {
   const { userId, isAuthenticated, isLoading } = useCurrentUser();
   const [state, setState] = useState<"input" | "processing" | "result">("input");
   const [resultData, setResultData] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
-
-  // ============================================================
-  // TEST LOGIN: To test this component, you can:
-  // 1. Open browser DevTools and check UserContext in React DevTools
-  // 2. Watch the console for user state changes
-  // 3. Try making a check without logging in - should see "Please log in" message
-  // 4. Log in and try again - should work and call /api/check with userId
-  // ============================================================
 
   const handleSubmit = async (payload: { decisionText: string; mode: string }) => {
     // Authentication check: userId is required and must be from context
@@ -53,18 +47,32 @@ const CheckScreen: React.FC = () => {
 
   // Show loading state while context is initializing
   if (isLoading) {
-    return <p className="text-center py-12 text-gray-500">Checking authentication...</p>;
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="text-center space-y-6">
+          <HourglassLoader size="lg" centerText />
+          <p className="text-neutral-600 font-medium">Preparing Frameworkd...</p>
+        </div>
+      </div>
+    );
   }
 
   // Show login prompt if not authenticated
   if (!isAuthenticated) {
     return (
-      <div className="space-y-10 text-center py-12">
-        <div className="bg-blue-50 border border-blue-200 text-blue-800 px-6 py-8 rounded-3xl">
-          <p className="text-lg font-semibold mb-2">Please log in to continue</p>
-          <p className="text-sm text-blue-700">
-            You need to be signed in to run structural checks. 
+      <div className="min-h-[60vh] flex flex-col items-center justify-center space-y-8 px-6">
+        <div className="text-center space-y-4 max-w-md">
+          <div className="text-6xl mb-4">🔐</div>
+          <h1 className="text-2xl font-semibold text-foreground">Sign In Required</h1>
+          <p className="text-neutral-600">
+            You need to be signed in to run structural decision analysis.
             Log in with your email to get started.
+          </p>
+        </div>
+        <div className="bg-amber-50 border border-amber-200 rounded-3xl p-6 max-w-sm">
+          <p className="text-sm text-amber-800">
+            <strong>Why sign in?</strong> Your analysis history is saved securely,
+            and you get access to advanced features like usage tracking and personalized insights.
           </p>
         </div>
       </div>
@@ -72,21 +80,45 @@ const CheckScreen: React.FC = () => {
   }
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-12">
       {/* Daily usage bar shows only for authenticated users */}
       {userId && <DailyUsageBar userId={userId} />}
 
+      {/* Error message */}
       {error && (
-        <div className="bg-red-100 text-red-700 px-6 py-4 rounded-3xl text-center">
-          {error}
+        <div className="bg-red-50 border border-red-200 rounded-3xl p-6 text-center">
+          <div className="text-red-800 font-medium mb-2">Analysis Failed</div>
+          <div className="text-red-700 text-sm">{error}</div>
         </div>
       )}
 
-      {state === "input" && <CheckForm onSubmit={handleSubmit} />}
-      {state === "processing" && <Processing onBack={() => setState("input")} />}
-      {state === "result" && <Result data={resultData} onBack={() => setState("input")} />}
+      {/* Main content based on state */}
+      <div className="space-y-16">
+        {state === "input" && (
+          <div className="space-y-16">
+            <CheckForm onSubmit={handleSubmit} />
 
-      <RecentChecks />
+            {/* Recent checks - subtle preview below */}
+            <div className="border-t border-neutral-200 pt-12">
+              <div className="text-center mb-8">
+                <h2 className="text-xl font-medium text-neutral-700 mb-2">Recent Analyses</h2>
+                <p className="text-neutral-500 text-sm">Your previous decision insights</p>
+              </div>
+              <RecentChecks />
+            </div>
+          </div>
+        )}
+
+        {state === "processing" && (
+          <div className="min-h-[60vh] flex items-center justify-center">
+            <LoadingState message="Running structural analysis..." />
+          </div>
+        )}
+
+        {state === "result" && (
+          <Result data={resultData} onBack={() => setState("input")} />
+        )}
+      </div>
     </div>
   );
 };
