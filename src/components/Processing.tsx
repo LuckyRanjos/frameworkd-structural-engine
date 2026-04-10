@@ -1,6 +1,12 @@
 "use client";
 
-export default function Processing({ onBack }: { onBack: () => void }) {
+import React from "react";
+
+interface ProcessingProps {
+  onBack: () => void;
+}
+
+const Processing: React.FC<ProcessingProps> = ({ onBack }) => {
   return (
     <div className="bg-white border border-gray-200 rounded-3xl p-10 shadow-sm">
       <button
@@ -35,4 +41,6 @@ export default function Processing({ onBack }: { onBack: () => void }) {
       </p>
     </div>
   );
-}
+};
+
+export default Processing;
