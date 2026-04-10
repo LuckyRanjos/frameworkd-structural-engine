@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "verify:normalize-verdict-status": "node scripts/verify-normalize-verdict-status.js"
+    "verify:normalize-verdict-status": "node scripts/verify-normalize-verdict-status.js",
+    "verify:auth": "node scripts/verify-auth-exports.js",
+    "verify": "npm run verify:normalize-verdict-status && npm run verify:auth"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
