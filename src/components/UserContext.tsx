@@ -47,38 +47,32 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     // Listen to Firebase auth state changes
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       try {
-        if (firebaseUser) {
-          // User is logged in
-          const uid = firebaseUser.uid;
-          setUserId(uid);
-          setEmail(firebaseUser.email || null);
+        // Determine UID: use Firebase user if logged in, otherwise use test UID
+        // ⚠️ REPLACE 'test-uid-for-development' with your real Firebase user ID
+        // Find your UID in Firebase Console → Authentication → Users → Copy UID
+        const uid = firebaseUser?.uid || "test-uid-for-development";
+        const userEmail = firebaseUser?.email || null;
 
-          // Fetch user document from Firestore
-          const userDocRef = doc(db, "users", uid);
-          const userDocSnap = await getDoc(userDocRef);
+        setUserId(uid);
+        setEmail(userEmail);
 
-          if (userDocSnap.exists()) {
-            const userData = userDocSnap.data();
-            setPlan(userData.plan || "free");
-            setRole(userData.role || "user");
-            setIsAdmin(userData.isAdmin || false);
-          } else {
-            // User doc doesn't exist yet, use defaults
-            setPlan("free");
-            setRole("user");
-            setIsAdmin(false);
-          }
+        // Fetch user document from Firestore
+        const userDocRef = doc(db, "users", uid);
+        const userDocSnap = await getDoc(userDocRef);
 
-          setError(null);
+        if (userDocSnap.exists()) {
+          const userData = userDocSnap.data();
+          setPlan(userData.plan || "free");
+          setRole(userData.role || "user");
+          setIsAdmin(userData.isAdmin || false);
         } else {
-          // User is logged out
-          setUserId(null);
-          setEmail(null);
+          // User doc doesn't exist yet, use defaults
           setPlan("free");
           setRole("user");
           setIsAdmin(false);
-          setError(null);
         }
+
+        setError(null);
       } catch (err: any) {
         console.error("Error fetching user data:", err);
         setError(err.message || "Failed to fetch user data");
