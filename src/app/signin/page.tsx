@@ -27,12 +27,21 @@ export default function SignInPage() {
       if (mode === "signin") {
         // For sign-in: check if user can sign in with password
         if (methods.length === 0) {
-          throw new Error(
-            "No account found with this email. Please create an account instead."
-          );
-        }
-
-        if (!methods.includes("password")) {
+          // Email not found in provider methods, but it might still exist
+          // Try the sign-in anyway and let Firebase give us the real error
+          console.log("No provider methods found, attempting direct sign-in");
+          try {
+            await signIn(email, password);
+          } catch (signInError: any) {
+            if (signInError.message.includes("invalid-credential")) {
+              throw new Error("Invalid email or password. Please check your credentials.");
+            }
+            if (signInError.message.includes("user-not-found")) {
+              throw new Error("No account found with this email. Please create an account instead.");
+            }
+            throw signInError;
+          }
+        } else if (!methods.includes("password")) {
           if (methods.includes("google.com")) {
             throw new Error(
               "This email is registered with Google sign-in. Please click 'Continue with Google' instead."
@@ -41,10 +50,10 @@ export default function SignInPage() {
           throw new Error(
             `This email is registered with a different sign-in method. Please use the correct provider.`
           );
+        } else {
+          // Email exists and has password provider, attempt sign-in
+          await signIn(email, password);
         }
-
-        // Email exists and has password provider, attempt sign-in
-        await signIn(email, password);
       } else {
         // For sign-up: check if email already exists
         if (methods.length > 0) {
@@ -147,6 +156,28 @@ export default function SignInPage() {
                 className="mt-6"
               >
                 {mode === "signin" ? "Sign In" : "Create Account"}
+              </Button>
+
+              <Button
+                type="button"
+                variant="secondary"
+                fullWidth
+                onClick={async () => {
+                  setError(null);
+                  setLoading(true);
+                  try {
+                    await signInWithGoogle();
+                    router.push("/");
+                  } catch (err: any) {
+                    console.error("Google sign-in error:", err);
+                    setError(err.message || "Google sign-in failed");
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                className="mt-3"
+              >
+                Continue with Google
               </Button>
             </form>
 

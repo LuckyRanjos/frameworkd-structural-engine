@@ -98,9 +98,15 @@ export function getCurrentUser(): User | null {
 // ============================================================
 export async function getSignInMethodsForEmail(email: string): Promise<string[]> {
   try {
-    return await fetchSignInMethodsForEmail(auth, email);
+    console.log("Checking sign-in methods for email:", email);
+    const methods = await fetchSignInMethodsForEmail(auth, email);
+    console.log("Sign-in methods found:", methods);
+    return methods;
   } catch (error: any) {
-    throw new Error(`Failed to check sign-in methods: ${error.message}`);
+    console.error("Error fetching sign-in methods:", error);
+    // If we get an error, it might mean the email doesn't exist
+    // But let's not throw here - return empty array instead
+    return [];
   }
 }
 
