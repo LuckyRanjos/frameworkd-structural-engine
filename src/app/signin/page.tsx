@@ -21,19 +21,41 @@ export default function SignInPage() {
     setLoading(true);
 
     try {
+      // Check provider methods FIRST before attempting auth
+      const methods = await getSignInMethodsForEmail(email);
+
       if (mode === "signin") {
+        // For sign-in: check if user can sign in with password
+        if (methods.length === 0) {
+          throw new Error(
+            "No account found with this email. Please create an account instead."
+          );
+        }
+
+        if (!methods.includes("password")) {
+          if (methods.includes("google.com")) {
+            throw new Error(
+              "This email is registered with Google sign-in. Please click 'Continue with Google' instead."
+            );
+          }
+          throw new Error(
+            `This email is registered with a different sign-in method. Please use the correct provider.`
+          );
+        }
+
+        // Email exists and has password provider, attempt sign-in
         await signIn(email, password);
       } else {
-        const methods = await getSignInMethodsForEmail(email);
+        // For sign-up: check if email already exists
         if (methods.length > 0) {
           if (methods.includes("password")) {
             throw new Error(
-              "This email is already registered. Please sign in instead of creating a new account."
+              "This email is already registered with a password. Please sign in instead."
             );
           }
           if (methods.includes("google.com")) {
             throw new Error(
-              "This email is registered with Google sign-in. Please use Google sign-in instead."
+              "This email is already registered with Google sign-in. Please use 'Continue with Google' instead."
             );
           }
           throw new Error(
@@ -41,26 +63,14 @@ export default function SignInPage() {
           );
         }
 
+        // Email doesn't exist, create new account
         await signUp(email, password);
       }
 
       router.push("/");
     } catch (err: any) {
       console.error(`${mode} error:`, err);
-      let message = err.message || `${mode === "signin" ? "Sign in" : "Sign up"} failed`;
-
-      if (mode === "signin" && email) {
-        try {
-          const methods = await getSignInMethodsForEmail(email);
-          if (methods.includes("google.com") && !methods.includes("password")) {
-            message =
-              "That email is registered with Google sign-in. Please sign in with Google.";
-          }
-        } catch (fetchErr) {
-          console.warn("Unable to fetch sign-in methods:", fetchErr);
-        }
-      }
-
+      const message = err.message || `${mode === "signin" ? "Sign in" : "Sign up"} failed`;
       setError(message);
     } finally {
       setLoading(false);
