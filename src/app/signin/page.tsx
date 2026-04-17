@@ -12,12 +12,14 @@ export default function SignInPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccessMessage(null);
     setLoading(true);
 
     try {
@@ -72,11 +74,16 @@ export default function SignInPage() {
           );
         }
 
-        // Email doesn't exist, create new account
-        await signUp(email, password);
+        // Email doesn't exist, create new account and send verification
+        const result = await signUp(email, password);
+        setSuccessMessage(result.message);
+        setEmail("");
+        setPassword("");
       }
 
-      router.push("/");
+      if (mode === "signin") {
+        router.push("/");
+      }
     } catch (err: any) {
       console.error(`${mode} error:`, err);
       const message = err.message || `${mode === "signin" ? "Sign in" : "Sign up"} failed`;
@@ -117,10 +124,15 @@ export default function SignInPage() {
               <p className="mt-1">Use your work or personal email to keep your analysis history in one place.</p>
             </div>
 
-            {/* Error Message */}
+            {/* Success / Error Message */}
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-2xl text-sm">
                 {error}
+              </div>
+            )}
+            {successMessage && (
+              <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-2xl text-sm">
+                {successMessage}
               </div>
             )}
 

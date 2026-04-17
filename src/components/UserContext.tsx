@@ -20,6 +20,7 @@ import { auth, db } from "@/lib/firebase";
 export type UserContextType = {
   userId: string | null;
   email: string | null;
+  emailVerified: boolean;
   plan: string;
   role: string;
   isAdmin: boolean;
@@ -38,6 +39,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   // User authentication state
   const [userId, setUserId] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
+  const [emailVerified, setEmailVerified] = useState<boolean>(false);
   
   // User profile state — role is the source of truth for permissions
   const [plan, setPlan] = useState<string>("free");
@@ -56,6 +58,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
           // SECURITY: Removed hardcoded fallback UID (no implicit authentication allowed)
           setUserId(null);
           setEmail(null);
+          setEmailVerified(false);
           setPlan("free");
           setRole("user");
           setError(null);
@@ -64,6 +67,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
           const uid = firebaseUser.uid;
           setUserId(uid);
           setEmail(firebaseUser.email || null);
+          setEmailVerified(firebaseUser.emailVerified);
 
           // Fetch user document from Firestore to get role and plan
           const userDocRef = doc(db, "users", uid);
@@ -98,6 +102,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   const value: UserContextType = {
     userId,
     email,
+    emailVerified,
     plan,
     role,
     isAdmin: role === "admin", // Computed from role, not separate state

@@ -16,7 +16,7 @@ import AppPage from "@/components/AppPage";
  * render based on isAuthenticated flag.
  */
 function PageContent() {
-  const { isAuthenticated, isLoading } = useCurrentUser();
+  const { isAuthenticated, isLoading, emailVerified } = useCurrentUser();
 
   // Show loading state while checking authentication
   if (isLoading) {
@@ -40,12 +40,12 @@ function PageContent() {
     );
   }
 
-  // Show landing page for unauthenticated users
-  if (!isAuthenticated) {
+  // Show landing page for unauthenticated users or users who still need to verify their email
+  if (!isAuthenticated || !emailVerified) {
     return <LandingPage />;
   }
 
-  // Show app for authenticated users
+  // Show app for verified authenticated users
   return <AppPage />;
 }
 

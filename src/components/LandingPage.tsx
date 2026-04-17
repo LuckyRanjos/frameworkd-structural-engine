@@ -1,12 +1,17 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
+import { sendVerificationEmail } from "@/lib/auth";
 import { useCurrentUser } from "@/components/UserContext";
 import { Button, Card } from "@/components/design-system";
 
 const LandingPage: React.FC = () => {
   const router = useRouter();
+  const { isAuthenticated, emailVerified } = useCurrentUser();
+  const [resendLoading, setResendLoading] = useState(false);
+  const [alertMessage, setAlertMessage] = useState<string | null>(null);
+  const [alertError, setAlertError] = useState<string | null>(null);
 
   const handleStartAnalysis = () => {
     // Navigate to sign in page
@@ -15,6 +20,20 @@ const LandingPage: React.FC = () => {
 
   const handleSignIn = () => {
     router.push("/signin");
+  };
+
+  const handleResendVerification = async () => {
+    setAlertMessage(null);
+    setAlertError(null);
+    setResendLoading(true);
+    try {
+      await sendVerificationEmail();
+      setAlertMessage("Verification email resent. Check your inbox.");
+    } catch (error: any) {
+      setAlertError(error.message || "Unable to resend verification email.");
+    } finally {
+      setResendLoading(false);
+    }
   };
 
   return (
@@ -35,6 +54,44 @@ const LandingPage: React.FC = () => {
           </div>
         </div>
       </nav>
+
+      {isAuthenticated && !emailVerified && (
+        <div className="max-w-5xl mx-auto px-6 py-6">
+          <div className="rounded-3xl border border-amber-200 bg-amber-50 p-5 text-amber-900 shadow-sm">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-semibold">Email verification required</p>
+                <p className="text-sm text-amber-800">
+                  Your account is signed in, but email verification is required before you can access Frameworkd.
+                </p>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleResendVerification}
+                  loading={resendLoading}
+                >
+                  Resend verification email
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => window.location.reload()}
+                >
+                  Refresh after verifying
+                </Button>
+              </div>
+            </div>
+            {alertMessage && (
+              <p className="mt-3 text-sm text-emerald-700">{alertMessage}</p>
+            )}
+            {alertError && (
+              <p className="mt-3 text-sm text-red-700">{alertError}</p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Hero Section */}
       <section className="max-w-5xl mx-auto px-6 py-24 text-center">

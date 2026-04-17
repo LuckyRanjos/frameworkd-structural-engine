@@ -20,14 +20,20 @@ import { auth } from "./firebase";
 // ============================================================
 // SIGN UP
 // ============================================================
-export async function signUp(email: string, password: string): Promise<User> {
+export async function signUp(email: string, password: string): Promise<{ user: User; message: string }> {
   try {
     const userCredential = await createUserWithEmailAndPassword(
       auth,
       email,
       password
     );
-    return userCredential.user;
+
+    await sendVerificationEmail();
+
+    return {
+      user: userCredential.user,
+      message: "Account created. Please check your email to verify.",
+    };
   } catch (error: any) {
     throw new Error(`Sign up failed: ${error.message}`);
   }
@@ -80,7 +86,12 @@ export async function sendVerificationEmail(): Promise<void> {
       throw new Error("No user is currently signed in");
     }
 
-    await sendEmailVerification(currentUser);
+    const actionCodeSettings = {
+      url: `${window.location.origin}/verify-email`,
+      handleCodeInApp: true,
+    };
+
+    await sendEmailVerification(currentUser, actionCodeSettings);
   } catch (error: any) {
     throw new Error(`Failed to send verification email: ${error.message}`);
   }
