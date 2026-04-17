@@ -3,8 +3,9 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { signIn, signUp, signInWithGoogle, getSignInMethodsForEmail } from "@/lib/auth";
+import { signInWithOTP, signUp, signInWithGoogle, getSignInMethodsForEmail, logout } from "@/lib/auth";
 import { Card, Button, Input } from "@/components/design-system";
+import OTPVerification from "@/components/OTPVerification";
 
 export default function SignInPage() {
   const router = useRouter();
@@ -15,6 +16,39 @@ export default function SignInPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showOTPModal, setShowOTPModal] = useState(false);
+  const [pendingUser, setPendingUser] = useState<{ email: string; userId: string } | null>(null);
+
+  const handleOTPResend = async () => {
+    if (!pendingUser) return;
+
+    // Generate and send new OTP
+    const { saveOTP, sendOTPEmail } = await import("@/lib/otp");
+    const code = await saveOTP(pendingUser.email, pendingUser.userId);
+    await sendOTPEmail(pendingUser.email, code);
+  };
+
+  const handleOTPSuccess = () => {
+    setShowOTPModal(false);
+    setPendingUser(null);
+    if (typeof window !== "undefined") {
+      window.sessionStorage.removeItem("frameworkd-otp-pending");
+    }
+    router.push("/");
+  };
+
+  const handleOTPCancel = async () => {
+    setShowOTPModal(false);
+    setPendingUser(null);
+    if (typeof window !== "undefined") {
+      window.sessionStorage.removeItem("frameworkd-otp-pending");
+    }
+    try {
+      await logout();
+    } catch (err: any) {
+      console.error("Logout failed:", err);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,20 +63,8 @@ export default function SignInPage() {
       if (mode === "signin") {
         // For sign-in: check if user can sign in with password
         if (methods.length === 0) {
-          // Email not found in provider methods, but it might still exist
-          // Try the sign-in anyway and let Firebase give us the real error
-          console.log("No provider methods found, attempting direct sign-in");
-          try {
-            await signIn(email, password);
-          } catch (signInError: any) {
-            if (signInError.message.includes("invalid-credential")) {
-              throw new Error("Invalid email or password. Please check your credentials.");
-            }
-            if (signInError.message.includes("user-not-found")) {
-              throw new Error("No account found with this email. Please create an account instead.");
-            }
-            throw signInError;
-          }
+          // Email not found in provider methods - user doesn't exist
+          throw new Error("No account found with this email. Please create an account instead.");
         } else if (!methods.includes("password")) {
           if (methods.includes("google.com")) {
             throw new Error(
@@ -53,8 +75,19 @@ export default function SignInPage() {
             `This email is registered with a different sign-in method. Please use the correct provider.`
           );
         } else {
-          // Email exists and has password provider, attempt sign-in
-          await signIn(email, password);
+          // Email exists and has password provider, attempt sign-in with OTP
+          const result = await signInWithOTP(email, password);
+
+          if (result.requiresOTP && result.otpSent) {
+            // Save OTP pending state so the app stays gated until verification
+            if (typeof window !== "undefined") {
+              window.sessionStorage.setItem("frameworkd-otp-pending", "true");
+            }
+            // Show OTP verification modal
+            setPendingUser({ email, userId: result.user.uid });
+            setShowOTPModal(true);
+            return; // Don't redirect yet
+          }
         }
       } else {
         // For sign-up: check if email already exists
@@ -227,6 +260,17 @@ export default function SignInPage() {
           <p>&copy; 2026 Frameworkd. All rights reserved.</p>
         </div>
       </footer>
+
+      {/* OTP Verification Modal */}
+      {showOTPModal && pendingUser && (
+        <OTPVerification
+          email={pendingUser.email}
+          userId={pendingUser.userId}
+          onSuccess={handleOTPSuccess}
+          onCancel={handleOTPCancel}
+          onResend={handleOTPResend}
+        />
+      )}
     </div>
   );
 }

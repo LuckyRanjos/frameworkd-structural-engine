@@ -18,6 +18,7 @@ import {
 
 import { auth } from "./firebase";
 import { createUserProfile } from "./firebase-helpers";
+import { saveOTP, sendOTPEmail } from "./otp";
 
 // ============================================================
 // SIGN UP
@@ -45,16 +46,30 @@ export async function signUp(email: string, password: string): Promise<{ user: U
 }
 
 // ============================================================
-// SIGN IN
+// SIGN IN WITH OTP VERIFICATION
 // ============================================================
-export async function signIn(email: string, password: string): Promise<User> {
+export async function signInWithOTP(email: string, password: string): Promise<{
+  user: User;
+  requiresOTP: boolean;
+  otpSent?: boolean;
+}> {
   try {
+    // First, authenticate with Firebase Auth
     const userCredential = await signInWithEmailAndPassword(
       auth,
       email,
       password
     );
-    return userCredential.user;
+
+    // Generate and send OTP
+    const otpCode = await saveOTP(email, userCredential.user.uid);
+    await sendOTPEmail(email, otpCode);
+
+    return {
+      user: userCredential.user,
+      requiresOTP: true,
+      otpSent: true,
+    };
   } catch (error: any) {
     throw new Error(`Sign in failed: ${error.message}`);
   }

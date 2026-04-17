@@ -27,6 +27,8 @@ export type UserContextType = {
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
+  requiresOTP: boolean; // New: tracks if user needs OTP verification
+  completeOTPVerification: () => void; // New: function to complete OTP verification
 };
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -40,10 +42,22 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
   const [userId, setUserId] = useState<string | null>(null);
   const [email, setEmail] = useState<string | null>(null);
   const [emailVerified, setEmailVerified] = useState<boolean>(false);
-  
+  const [requiresOTP, setRequiresOTP] = useState<boolean>(false);
+
   // User profile state — role is the source of truth for permissions
   const [plan, setPlan] = useState<string>("free");
   const [role, setRole] = useState<string>("user");
+
+  const setOTPRequired = (required: boolean) => {
+    setRequiresOTP(required);
+    if (typeof window !== "undefined") {
+      if (required) {
+        window.sessionStorage.setItem("frameworkd-otp-pending", "true");
+      } else {
+        window.sessionStorage.removeItem("frameworkd-otp-pending");
+      }
+    }
+  };
   
   // Loading and error state
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -58,6 +72,7 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
           setUserId(null);
           setEmail(null);
           setEmailVerified(false);
+          setOTPRequired(false);
           setPlan("free");
           setRole("user");
           setError(null);
@@ -66,6 +81,11 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
           const uid = firebaseUser.uid;
           setUserId(uid);
           setEmail(firebaseUser.email || null);
+
+          const otpPending =
+            typeof window !== "undefined" &&
+            window.sessionStorage.getItem("frameworkd-otp-pending") === "true";
+          setOTPRequired(otpPending);
           
           // IMPORTANT: Check emailVerified status immediately
           // Then re-check after a short delay to catch any updates
@@ -145,6 +165,8 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
     isAuthenticated: !!userId,
     isLoading,
     error,
+    requiresOTP,
+    completeOTPVerification: () => setOTPRequired(false), // Function to complete OTP verification
   };
 
   return (

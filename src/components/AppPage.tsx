@@ -9,13 +9,15 @@ import DashboardScreen from "@/components/DashboardScreen";
 import BillingScreen from "@/components/BillingScreen";
 import AdminScreen from "@/components/AdminScreen";
 import { useCurrentUser } from "@/components/UserContext";
-import { sendVerificationEmail } from "@/lib/auth";
+import { sendVerificationEmail, logout } from "@/lib/auth";
 import { Button, Card } from "@/components/design-system";
+import OTPVerification from "@/components/OTPVerification";
+import { saveOTP, sendOTPEmail } from "@/lib/otp";
 
 export default function AppPage() {
   const pathname = usePathname();
   const router = useRouter();
-  const { isAuthenticated, isLoading, emailVerified } = useCurrentUser();
+  const { isAuthenticated, isLoading, emailVerified, requiresOTP, completeOTPVerification, email, userId } = useCurrentUser();
   const [resendLoading, setResendLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [statusError, setStatusError] = useState<string | null>(null);
@@ -64,6 +66,29 @@ export default function AppPage() {
           </div>
         </Card>
       </div>
+    );
+  }
+
+  if (requiresOTP) {
+    return (
+      <OTPVerification
+        email={email || ""}
+        userId={userId || ""}
+        onSuccess={() => completeOTPVerification()}
+        onCancel={async () => {
+          try {
+            await logout();
+          } catch (err: any) {
+            console.error("Logout failed:", err);
+          }
+        }}
+        onResend={async () => {
+          if (email && userId) {
+            const code = await saveOTP(email, userId);
+            await sendOTPEmail(email, code);
+          }
+        }}
+      />
     );
   }
 
