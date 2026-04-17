@@ -80,6 +80,11 @@ export async function logout(): Promise<void> {
 // ============================================================
 // SEND VERIFICATION EMAIL
 // ============================================================
+// To customize email link text (e.g., "Click to Verify Email" instead of raw URL):
+// 1. Go to Firebase Console > Authentication > Templates
+// 2. Click on "Email Verification" 
+// 3. Customize the email template HTML
+// 4. Use {{ACTION_URL}} placeholder for the verification link
 export async function sendVerificationEmail(): Promise<void> {
   try {
     const currentUser = auth.currentUser;

@@ -37,9 +37,12 @@ function VerifyEmailContent() {
           // User is authenticated and verification succeeded
           setStep("verified");
           setMessage("Your email has been verified successfully!");
+          // Redirect immediately and also as fallback
+          router.push("/dashboard");
+          // Force redirect after 1 second if router.push doesn't work
           setTimeout(() => {
-            router.push("/dashboard");
-          }, 2000);
+            window.location.href = "/dashboard";
+          }, 1000);
         } else if (result.isAuthenticated && !result.isDomainVerified) {
           // User is authenticated but verification didn't apply (shouldn't happen)
           setStep("error");
