@@ -61,11 +61,9 @@ export default function SignInPage() {
       const methods = await getSignInMethodsForEmail(email);
 
       if (mode === "signin") {
-        // For sign-in: check if user can sign in with password
-        if (methods.length === 0) {
-          // Email not found in provider methods - user doesn't exist
-          throw new Error("No account found with this email. Please create an account instead.");
-        } else if (!methods.includes("password")) {
+        // For sign-in: check if user can sign in with password.
+        // If provider check fails, still try sign-in to avoid false negatives.
+        if (!methods.includes("password") && methods.length > 0) {
           if (methods.includes("google.com")) {
             throw new Error(
               "This email is registered with Google sign-in. Please click 'Continue with Google' instead."
@@ -74,20 +72,28 @@ export default function SignInPage() {
           throw new Error(
             `This email is registered with a different sign-in method. Please use the correct provider.`
           );
-        } else {
-          // Email exists and has password provider, attempt sign-in with OTP
+        }
+
+        try {
           const result = await signInWithOTP(email, password);
 
           if (result.requiresOTP && result.otpSent) {
-            // Save OTP pending state so the app stays gated until verification
             if (typeof window !== "undefined") {
               window.sessionStorage.setItem("frameworkd-otp-pending", "true");
             }
-            // Show OTP verification modal
             setPendingUser({ email, userId: result.user.uid });
             setShowOTPModal(true);
             return; // Don't redirect yet
           }
+        } catch (signInError: any) {
+          const message = signInError.message || "Sign in failed";
+          if (message.includes("user-not-found")) {
+            throw new Error("No account found with this email. Please create an account instead.");
+          }
+          if (message.includes("wrong-password") || message.includes("invalid-credential")) {
+            throw new Error("Invalid email or password. Please check your credentials.");
+          }
+          throw signInError;
         }
       } else {
         // For sign-up: check if email already exists
