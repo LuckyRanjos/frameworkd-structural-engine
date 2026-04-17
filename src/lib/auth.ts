@@ -17,6 +17,7 @@ import {
 } from "firebase/auth";
 
 import { auth } from "./firebase";
+import { createUserProfile } from "./firebase-helpers";
 
 // ============================================================
 // SIGN UP
@@ -28,6 +29,9 @@ export async function signUp(email: string, password: string): Promise<{ user: U
       email,
       password
     );
+
+    // Create user profile in Firestore
+    await createUserProfile(userCredential.user.uid, email);
 
     await sendVerificationEmail();
 

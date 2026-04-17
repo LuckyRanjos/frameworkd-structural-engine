@@ -72,37 +72,50 @@ export const UserProvider = ({ children }: { children: ReactNode }) => {
           setEmailVerified(firebaseUser.emailVerified);
           
           // Fetch user document from Firestore to get role and plan
-          const userDocRef = doc(db, "users", uid);
-          const userDocSnap = await getDoc(userDocRef);
+          // Handle gracefully if document doesn't exist yet (e.g., during signup)
+          try {
+            const userDocRef = doc(db, "users", uid);
+            const userDocSnap = await getDoc(userDocRef);
 
-          if (userDocSnap.exists()) {
-            const userData = userDocSnap.data();
-            setRole(userData.role || "user");
-            setPlan(userData.plan || "free");
-          } else {
+            if (userDocSnap.exists()) {
+              const userData = userDocSnap.data();
+              setRole(userData.role || "user");
+              setPlan(userData.plan || "free");
+            } else {
+              // User document doesn't exist yet, use defaults
+              console.log("User document not found, using defaults for:", uid);
+              setRole("user");
+              setPlan("free");
+            }
+          } catch (firestoreError: any) {
+            console.error("Error fetching user document:", firestoreError);
+            // Use defaults if Firestore fails
             setRole("user");
             setPlan("free");
           }
 
           setError(null);
           
-          // Poll verification status for 30 seconds after auth state change
+          // Poll verification status for 10 seconds after auth state change
           // This catches the case where verification is applied via email link
           const pollInterval = setInterval(async () => {
             try {
               await firebaseUser.reload();
+              const wasVerified = emailVerified;
               setEmailVerified(firebaseUser.emailVerified);
-              // Stop polling if verified
-              if (firebaseUser.emailVerified) {
+              
+              // Stop polling if verification status changed
+              if (firebaseUser.emailVerified !== wasVerified) {
                 clearInterval(pollInterval);
               }
             } catch (err: any) {
               console.error("Error polling verification status:", err);
+              clearInterval(pollInterval);
             }
-          }, 1000); // Check every second
+          }, 2000); // Check every 2 seconds
           
-          // Clear polling after 30 seconds
-          const timeout = setTimeout(() => clearInterval(pollInterval), 30000);
+          // Clear polling after 10 seconds
+          const timeout = setTimeout(() => clearInterval(pollInterval), 10000);
           
           return () => {
             clearInterval(pollInterval);
