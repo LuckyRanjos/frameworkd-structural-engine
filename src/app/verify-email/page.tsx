@@ -4,7 +4,7 @@ import React, { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { applyVerificationCode, sendVerificationEmail, refreshUserVerification } from "@/lib/auth";
-import { useCurrentUser } from "@/components/UserContext";
+import { useCurrentUser, UserProvider } from "@/components/UserContext";
 import { Card, Button } from "@/components/design-system";
 
 export const dynamic = "force-dynamic";
@@ -216,17 +216,19 @@ function VerifyEmailContent() {
 
 export default function VerifyEmailPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="min-h-screen bg-[#f8f4ed] flex items-center justify-center px-6 py-12">
-          <Card className="w-full max-w-lg p-8 text-center">
-            <p className="text-neutral-600">Loading verification flow...</p>
-          </Card>
-        </div>
-      }
-    >
-      <VerifyEmailContent />
-    </Suspense>
+    <UserProvider>
+      <Suspense
+        fallback={
+          <div className="min-h-screen bg-[#f8f4ed] flex items-center justify-center px-6 py-12">
+            <Card className="w-full max-w-lg p-8 text-center">
+              <p className="text-neutral-600">Loading verification flow...</p>
+            </Card>
+          </div>
+        }
+      >
+        <VerifyEmailContent />
+      </Suspense>
+    </UserProvider>
   );
 }
 
