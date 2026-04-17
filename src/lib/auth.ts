@@ -13,6 +13,7 @@ import {
   onAuthStateChanged,
   fetchSignInMethodsForEmail,
   User,
+  applyActionCode,
 } from "firebase/auth";
 
 import { auth } from "./firebase";
@@ -122,6 +123,66 @@ export async function getSignInMethodsForEmail(email: string): Promise<string[]>
 }
 
 // ============================================================
+// APPLY VERIFICATION CODE
+// ============================================================
+export async function applyVerificationCode(
+  oobCode: string
+): Promise<{ success: boolean; isAuthenticated: boolean; isDomainVerified?: boolean }> {
+  try {
+    if (!oobCode) {
+      throw new Error("Verification code is missing");
+    }
+
+    // Apply the verification code
+    await applyActionCode(auth, oobCode);
+
+    // Check if user is currently authenticated
+    const currentUser = auth.currentUser;
+
+    if (currentUser) {
+      // User is authenticated - reload to get updated emailVerified status
+      await currentUser.reload();
+      return {
+        success: true,
+        isAuthenticated: true,
+        isDomainVerified: currentUser.emailVerified,
+      };
+    } else {
+      // User is not authenticated - verification still applied server-side
+      // but user will need to sign in to see the verified status reflected
+      return {
+        success: true,
+        isAuthenticated: false,
+      };
+    }
+  } catch (error: any) {
+    console.error("Apply verification code failed:", error);
+    throw new Error(
+      error?.message ||
+        "Verification failed. The link may be expired or invalid."
+    );
+  }
+}
+
+// ============================================================
+// REFRESH USER VERIFICATION STATUS
+// ============================================================
+export async function refreshUserVerification(): Promise<boolean> {
+  try {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      throw new Error("No user is currently signed in");
+    }
+
+    await currentUser.reload();
+    return currentUser.emailVerified;
+  } catch (error: any) {
+    console.error("Refresh verification failed:", error);
+    throw new Error(`Failed to refresh verification status: ${error.message}`);
+  }
+}
+
+// ============================================================
 // LISTEN TO AUTH STATE CHANGES
 // ============================================================
 export function onAuthStateChange(
@@ -129,3 +190,4 @@ export function onAuthStateChange(
 ): (() => void) {
   return onAuthStateChanged(auth, callback);
 }
+
