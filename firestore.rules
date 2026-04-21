@@ -95,6 +95,27 @@ service cloud.firestore {
     }
 
     // --------------------------------------------------------
+    // OTP COLLECTION
+    // /otps/{email}
+    // OTP codes for email verification during sign-in
+    // --------------------------------------------------------
+
+    match /otps/{email} {
+
+      // READ: users can read OTPs for their own email
+      allow read: if isSignedIn() && request.auth.token.email == email;
+
+      // CREATE: users can create OTPs for their own email
+      allow create: if isSignedIn() && request.auth.token.email == email;
+
+      // UPDATE: not allowed - OTPs are immutable once created
+      allow update: if false;
+
+      // DELETE: users can delete their own OTPs (happens after verification)
+      allow delete: if isSignedIn() && request.auth.token.email == email;
+    }
+
+    // --------------------------------------------------------
     // EVERYTHING ELSE
     // Deny all access to any collection not listed above.
     // If you add new collections later, add rules for them.

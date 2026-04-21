@@ -14,7 +14,7 @@ type VerificationStep = "applying" | "success" | "need-signin" | "verified" | "e
 function VerifyEmailContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { isAuthenticated, emailVerified, isLoading: userLoading } = useCurrentUser();
+  const { isAuthenticated, emailVerified, isLoading: userLoading, refreshUser } = useCurrentUser();
   const [step, setStep] = useState<VerificationStep>("applying");
   const [message, setMessage] = useState<string>("Verifying your account...");
   const [resendLoading, setResendLoading] = useState(false);
@@ -33,26 +33,33 @@ function VerifyEmailContent() {
       try {
         const result = await applyVerificationCode(oobCode);
 
-        if (result.isAuthenticated && result.isDomainVerified) {
-          // User is authenticated and verification succeeded
-          setStep("verified");
-          setMessage("Your email has been verified successfully!");
-          // Small delay to ensure auth state has settled
-          setTimeout(() => {
-            router.push("/dashboard");
-          }, 500);
-          // Force redirect after 2 seconds if router.push doesn't work
-          setTimeout(() => {
-            window.location.href = "/dashboard";
-          }, 2000);
-        } else if (result.isAuthenticated && !result.isDomainVerified) {
-          // User is authenticated but verification didn't apply (shouldn't happen)
+        if (result.success) {
+          // Verification code applied successfully
+          // Now refresh the user data to get the updated emailVerified status
+          await refreshUser();
+
+          // Check if the user is now verified
+          const currentUser = auth.currentUser;
+          if (currentUser?.emailVerified) {
+            setStep("verified");
+            setMessage("Your email has been verified successfully!");
+            // Small delay to ensure auth state has settled
+            setTimeout(() => {
+              router.push("/dashboard");
+            }, 500);
+            // Force redirect after 2 seconds if router.push doesn't work
+            setTimeout(() => {
+              window.location.href = "/dashboard";
+            }, 2000);
+          } else {
+            // Verification applied but user still not marked as verified
+            setStep("manual-check");
+            setMessage("Verification link processed. Please check your verification status.");
+          }
+        } else {
+          // Verification failed
           setStep("error");
-          setMessage("Verification could not be applied. Please try again.");
-        } else if (!result.isAuthenticated) {
-          // User is not authenticated - ask them to sign in
-          setStep("need-signin");
-          setMessage("Email verified! Sign in to access your account.");
+          setMessage("Email verification failed. The link may have expired.");
         }
       } catch (error: any) {
         console.error("Email verification failed:", error);
